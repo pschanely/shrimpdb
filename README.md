@@ -22,12 +22,11 @@ Use db.view() for read-only access:
 ShripDb is thread safe.
 The dictionaries returned are always lazily instanciated, so your structure on disk can be much larger than RAM.
 
-The object graph must be acyclic, but it may re-use objects:
-
             with db as root:
-                root['people']['Phil']['children'] = [root['people']['Tyler']]
+                root['people']['Phil']['children'] = ['Tyler']
                 root['colors'].pop()
 
+The structure should be a tree, not an arbitrary graph (no cycles, and there ahouls be only one path to reach any node).
 If an update does not modify anything under a dictionary, it will re-use the previously serialized version of that dictionary, writing only the structure that sits above the changes.
 
 Because it's append-only, old db.view()s never change.  Feel free to hold on and use as many as you like.  That is, until you compact the database, which will remove any data that's not reachable from the current root:

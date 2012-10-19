@@ -1,5 +1,5 @@
 """
-shripdb.py - A tiny, simple, and capable embedded database for Python
+shrimpdb.py - A tiny, simple, and capable embedded database for Python
 
 Copyright 2012 Phillip Schanely
 

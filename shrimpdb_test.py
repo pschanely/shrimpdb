@@ -1,8 +1,8 @@
 import os
 import unittest
+import tempfile
 
 import shrimpdb
-import tempfile
 
 class CoreServerTestCase(unittest.TestCase):
 
@@ -28,12 +28,6 @@ class CoreServerTestCase(unittest.TestCase):
             self.assertEquals({'people':['Jim'], 'score':{'top':8}}, db.view())
         finally:
             os.unlink(fh.name)
-
-
-db = shrimpdb.ShrimpDb(filename='/tmp/test.shrimpdb')
-with db as root:
-    root['people'] = {'Phil': {'age':34}, 'Tyler':{'age':5}}
-    root['colors'] = ['red', 'green', 'blue']
 
 if __name__ == '__main__':
     unittest.main()

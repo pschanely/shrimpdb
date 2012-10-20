@@ -4,7 +4,7 @@ shrimpdb
 A tiny, simple, and capable embedded database for Python
 
 
-Append-only database that can maintain a large tree of JSON-compatable Python objects on disk.  It's about 200 lines of forkable goodness.
+Append-only database that can maintain a large tree of JSON-compatible Python objects on disk.  It's just a few hundred lines of forkable goodness.
 
 Use "with db" to make modifications (these changes are committed atomically):
 
@@ -20,13 +20,13 @@ Use db.view() for read-only access:
             print view['people']['Phil']['age']
 
 ShripDb is thread safe.
-The dictionaries returned are always lazily instanciated, so your structure on disk can be much larger than RAM.
+The dictionaries returned are always lazily instantiated, so your structure on disk can be much larger than RAM.
 
             with db as root:
                 root['people']['Phil']['children'] = ['Tyler']
                 root['colors'].pop()
 
-The structure should be a tree, not an arbitrary graph (no cycles, and there ahouls be only one path to reach any node).
+The structure should be a tree, not an arbitrary graph (no cycles, and there should be only one path to reach any node).
 If an update does not modify anything under a dictionary, it will re-use the previously serialized version of that dictionary, writing only the structure that sits above the changes.
 
 Because it's append-only, old db.view()s never change.  Feel free to hold on and use as many as you like.  That is, until you compact the database, which will remove any data that's not reachable from the current root:

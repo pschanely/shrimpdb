@@ -17,6 +17,7 @@ limitations under the License.
 """
 
 import collections
+import copy
 import json
 import os
 import UserDict
@@ -43,7 +44,8 @@ class ShrimpDb(object):
         if not os.path.exists(filename):
             open(filename, 'wb').close()
         self.opendb()
-        self.lock = threading.RLock()
+        self.update_lock = threading.Lock()
+        self.fh_lock = threading.RLock()
         self.current_write_view = None
     
     def opendb(self):
@@ -58,16 +60,20 @@ class ShrimpDb(object):
         self.fh.close()
         self.fh = None
 
+    def drop(self):
+        self.closedb()
+        os.unlink(self.filename)
+
     def view(self):
         return DbView(self, self.root_pointer).get()
 
     def size(self):
-        with self.lock:
+        with self.fh_lock:
             self.fh.seek(0, 2)
             return self.fh.tell()
 
     def compact(self):
-        with self.lock:
+        with self.update_lock:
             tempfilename = self.filename+'.compacting'
             tmpdb = ShrimpDb(filename=tempfilename)
             tmpdb.write_changes(self.view())
@@ -79,7 +85,7 @@ class ShrimpDb(object):
 
     def is_db_dict(self, obj):
         return (isinstance(obj, ShrimpDict) and 
-                obj._view.sync_db.fh.fileno() == self.fh.fileno())
+                obj._view.shrimp_db.fh.fileno() == self.fh.fileno())
 
     def compare_and_write(self, oldobj, newobj):
         all_same = True
@@ -128,13 +134,20 @@ class ShrimpDb(object):
         else:
             return newobj, oldobj == newobj
 
+    def readline(self, addr):
+        with self.fh_lock:
+            fh = self.fh
+            fh.seek(addr)
+            return json.loads(fh.readline())
+
     def writeline(self, data):
-        fh = self.fh
-        fh.seek(0, 2)
-        addr = fh.tell()
-        fh.write(json.dumps(data))
-        fh.write('\n')
-        return addr
+        with self.fh_lock:
+            fh = self.fh
+            fh.seek(0, 2)
+            addr = fh.tell()
+            fh.write(json.dumps(data))
+            fh.write('\n')
+            return addr
 
     def write_changes(self, newroot):
         root, same = self.compare_and_write(
@@ -142,14 +155,15 @@ class ShrimpDb(object):
             newroot)
         if not same:
             self.root_pointer = int(root, 16)
-            fh = self.fh
-            fh.seek(0)
-            fh.write('%08x' % self.root_pointer)
-            fh.flush()
-            os.fsync(fh.fileno())
+            with self.fh_lock:
+                fh = self.fh
+                fh.seek(0)
+                fh.write('%08x' % self.root_pointer)
+                fh.flush()
+                os.fsync(fh.fileno())
 
     def __enter__(self):
-        self.lock.acquire()
+        self.update_lock.acquire()
         if self.current_write_view is not None:
             raise Exception('Cannot update inside another update')
         self.current_write_view = DbView(self, self.root_pointer)
@@ -159,19 +173,13 @@ class ShrimpDb(object):
         if exc_type is None:
             self.write_changes(self.current_write_view.get())
         self.current_write_view = None
-        self.lock.release()
+        self.update_lock.release()
 
 class DbView(object):
-    def __init__(self, sync_db, root_addr):
-        self.sync_db = sync_db
+    def __init__(self, shrimp_db, root_addr):
+        self.shrimp_db = shrimp_db
         self.cache = weakref.WeakValueDictionary()
         self.root_addr = root_addr
-
-    def readline(self, addr):
-        with self.sync_db.lock:
-            fh = self.sync_db.fh
-            fh.seek(addr)
-            return json.loads(fh.readline())
 
     def get(self, addr=None):
         if addr is None:
@@ -183,16 +191,25 @@ class DbView(object):
         self.cache[addr] = val
         return val
         
-class ShrimpDict(UserDict.DictMixin, collections.MutableMapping):
+class ShrimpDict(UserDict.DictMixin, 
+                 # these supclasses are here just because common libraries test for them:
+                 collections.MutableMapping, dict 
+                 ):
 
     def __init__(self, view, addr):
         self._view = view
         self._addr = addr
         self._state = None
 
+    def copy(self):
+        return dict(self.iteritems())
+
+    def __deepcopy__(self, memo):
+        return dict((k, copy.deepcopy(v, memo)) for k, v in self.iteritems())
+
     def _materialize(self):
         if self._state is None:
-            state = self._view.readline(self._addr)
+            state = self._view.shrimp_db.readline(self._addr)
             self._state = dict((k, _resolve_addrs(v, self._view))
                                for k, v in state.iteritems())
             

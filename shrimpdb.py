@@ -18,11 +18,14 @@ limitations under the License.
 
 import collections
 import copy
-import json
 import os
-import UserDict
 import threading
-import weakref
+import UserDict
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 def _resolve_addrs(obj, view):
     if isinstance(obj, basestring):
@@ -30,7 +33,7 @@ def _resolve_addrs(obj, view):
             return obj[1:]
         else:
             addr = int(obj, 16)
-            return ShrimpDict(view, addr)
+            return view.get(addr)
     elif hasattr(obj, '__iter__'):
         return [_resolve_addrs(item, view) for item in obj]
     else:
@@ -39,8 +42,9 @@ def _resolve_addrs(obj, view):
 _NOVAL = object()
 
 class ShrimpDb(object):
-    def __init__(self, filename):
+    def __init__(self, filename, view_wrapper=lambda x:x):
         self.filename = filename
+        self.view_wrapper = view_wrapper
         if not os.path.exists(filename):
             open(filename, 'wb').close()
         self.opendb()
@@ -65,7 +69,7 @@ class ShrimpDb(object):
         os.unlink(self.filename)
 
     def view(self):
-        return DbView(self, self.root_pointer).get()
+        return self.view_wrapper(DbView(self, self.root_pointer).get())
 
     def size(self):
         with self.fh_lock:
@@ -138,7 +142,7 @@ class ShrimpDb(object):
         with self.fh_lock:
             fh = self.fh
             fh.seek(addr)
-            return json.loads(fh.readline())
+            return json.loads(fh.readline()[:-1])
 
     def writeline(self, data):
         with self.fh_lock:
@@ -167,7 +171,7 @@ class ShrimpDb(object):
         if self.current_write_view is not None:
             raise Exception('Cannot update inside another update')
         self.current_write_view = DbView(self, self.root_pointer)
-        return self.current_write_view.get()
+        return self.view_wrapper(self.current_write_view.get())
 
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
@@ -178,7 +182,7 @@ class ShrimpDb(object):
 class DbView(object):
     def __init__(self, shrimp_db, root_addr):
         self.shrimp_db = shrimp_db
-        self.cache = weakref.WeakValueDictionary()
+        self.cache = {}
         self.root_addr = root_addr
 
     def get(self, addr=None):
@@ -240,3 +244,11 @@ class ShrimpDict(UserDict.DictMixin,
     def iteritems(self):
         self._materialize()
         return self._state.iteritems()
+
+    def items(self):
+        self._materialize()
+        return self._state.items()
+
+    def iterkeys(self):
+        self._materialize()
+        return self._state.iterkeys()

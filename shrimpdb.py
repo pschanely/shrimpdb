@@ -28,18 +28,6 @@ try:
 except ImportError:
     import json
 
-def _resolve_addrs(obj, view):
-    if isinstance(obj, basestring):
-        if obj[0] == "|":
-            return obj[1:]
-        else:
-            addr = int(obj, 16)
-            return view.get(addr)
-    elif hasattr(obj, '__iter__'):
-        return [_resolve_addrs(item, view) for item in obj]
-    else:
-        return obj
-
 _NOVAL = object()
 
 class ShrimpDb(object):
@@ -222,11 +210,22 @@ class ShrimpDict(UserDict.DictMixin,
         state = self._state()
         if state is None:
             obj = self._view.shrimp_db.readline(self._addr)
-            state = WeakableDict((k, _resolve_addrs(v, self._view))
+            state = WeakableDict((k, self._resolve_addrs(v))
                                  for k, v in obj.iteritems())
             self._state = weakref.ref(state) if self._is_weak else lambda :state
         return state
             
+    def _resolve_addrs(self, obj):
+        if isinstance(obj, basestring):
+            if obj[0] == "|":
+                return obj[1:]
+            else:
+                return self._view.get(int(obj, 16))
+        elif hasattr(obj, '__iter__'):
+            return [self._resolve_addrs(item) for item in obj]
+        else:
+            return obj
+
     def __delitem__(self, key):
         return self._materialize().__delitem__(key)
         

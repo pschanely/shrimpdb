@@ -71,7 +71,7 @@ class ShrimpDb(object):
 
     def view(self):
         return self.view_wrapper(DbView(
-                self, self.root_pointer, weak=True).get())
+                self, self.root_pointer, is_weak=True).get())
 
     def size(self):
         with self.fh_lock:
@@ -157,7 +157,7 @@ class ShrimpDb(object):
 
     def write_changes(self, newroot):
         root, same = self.compare_and_write(
-            DbView(self, self.root_pointer, weak=True).get(),
+            DbView(self, self.root_pointer, is_weak=True).get(),
             newroot)
         if not same:
             self.root_pointer = int(root, 16)
@@ -172,7 +172,7 @@ class ShrimpDb(object):
         self.update_lock.acquire()
         if self.current_write_view is not None:
             raise Exception('Cannot update inside another update')
-        self.current_write_view = DbView(self, self.root_pointer, weak=False)
+        self.current_write_view = DbView(self, self.root_pointer, is_weak=False)
         return self.view_wrapper(self.current_write_view.get())
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -182,9 +182,10 @@ class ShrimpDb(object):
         self.update_lock.release()
 
 class DbView(object):
-    def __init__(self, shrimp_db, root_addr, weak=True):
+    def __init__(self, shrimp_db, root_addr, is_weak=True):
         self.shrimp_db = shrimp_db
-        self.cache = weakref.WeakValueDictionary() if weak else {}
+        self.cache = weakref.WeakValueDictionary() if is_weak else {}
+        self.is_weak = is_weak
         self.root_addr = root_addr
 
     def get(self, addr=None):
@@ -193,19 +194,23 @@ class DbView(object):
         cached = self.cache.get(addr)
         if cached:
             return cached
-        val = ShrimpDict(self, addr)
+        val = ShrimpDict(self, addr, self.is_weak)
         self.cache[addr] = val
         return val
+
+class WeakableDict(dict):
+    pass  # because native dicts can't be weakref'd!
         
 class ShrimpDict(UserDict.DictMixin, 
                  # these supclasses are here just because common libraries test for them:
                  collections.MutableMapping, dict 
                  ):
 
-    def __init__(self, view, addr):
+    def __init__(self, view, addr, is_weak):
         self._view = view
         self._addr = addr
-        self._state = None
+        self._state = lambda :None
+        self._is_weak = is_weak
 
     def copy(self):
         return dict(self.iteritems())
@@ -214,43 +219,37 @@ class ShrimpDict(UserDict.DictMixin,
         return dict((k, copy.deepcopy(v, memo)) for k, v in self.iteritems())
 
     def _materialize(self):
-        if self._state is None:
-            state = self._view.shrimp_db.readline(self._addr)
-            self._state = dict((k, _resolve_addrs(v, self._view))
-                               for k, v in state.iteritems())
+        state = self._state()
+        if state is None:
+            obj = self._view.shrimp_db.readline(self._addr)
+            state = WeakableDict((k, _resolve_addrs(v, self._view))
+                                 for k, v in obj.iteritems())
+            self._state = weakref.ref(state) if self._is_weak else lambda :state
+        return state
             
     def __delitem__(self, key):
-        self._materialize()
-        return self._state.__delitem__(key)
+        return self._materialize().__delitem__(key)
         
     def __setitem__(self, key, val):
-        self._materialize()
-        return self._state.__setitem__(key, val)
+        return self._materialize().__setitem__(key, val)
     
     def __getitem__(self, key):
-        self._materialize()
-        return self._state.__getitem__(key)
+        return self._materialize().__getitem__(key)
 
     def keys(self):
-        self._materialize()
-        return self._state.keys()
+        return self._materialize().keys()
 
     def __contains__(self, key):
-        self._materialize()
-        return self._state.__contains__(key)
+        return self._materialize().__contains__(key)
 
     def __iter__(self):
-        self._materialize()
-        return self._state.__iter__()
+        return self._materialize().__iter__()
 
     def iteritems(self):
-        self._materialize()
-        return self._state.iteritems()
+        return self._materialize().iteritems()
 
     def items(self):
-        self._materialize()
-        return self._state.items()
+        return self._materialize().items()
 
     def iterkeys(self):
-        self._materialize()
-        return self._state.iterkeys()
+        return self._materialize().iterkeys()

@@ -4,7 +4,7 @@ shrimpdb
 A tiny, simple, and capable embedded database for Python
 
 
-Append-only database that can maintain a large tree of JSON-compatible Python objects on disk.  It's just a few hundred lines of forkable goodness.
+ShrimpDB is an append-only database that can maintain a large tree of JSON-compatible Python objects on disk.  It's just a few hundred lines of forkable goodness.
 
 Use "with db" to make modifications (these changes are committed atomically):
 

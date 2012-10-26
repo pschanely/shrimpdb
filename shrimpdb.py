@@ -21,6 +21,7 @@ import copy
 import os
 import threading
 import UserDict
+import weakref
 
 try:
     import ujson as json
@@ -69,7 +70,8 @@ class ShrimpDb(object):
         os.unlink(self.filename)
 
     def view(self):
-        return self.view_wrapper(DbView(self, self.root_pointer).get())
+        return self.view_wrapper(DbView(
+                self, self.root_pointer, weak=True).get())
 
     def size(self):
         with self.fh_lock:
@@ -155,7 +157,7 @@ class ShrimpDb(object):
 
     def write_changes(self, newroot):
         root, same = self.compare_and_write(
-            DbView(self, self.root_pointer).get(),
+            DbView(self, self.root_pointer, weak=True).get(),
             newroot)
         if not same:
             self.root_pointer = int(root, 16)
@@ -170,7 +172,7 @@ class ShrimpDb(object):
         self.update_lock.acquire()
         if self.current_write_view is not None:
             raise Exception('Cannot update inside another update')
-        self.current_write_view = DbView(self, self.root_pointer)
+        self.current_write_view = DbView(self, self.root_pointer, weak=False)
         return self.view_wrapper(self.current_write_view.get())
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -180,9 +182,9 @@ class ShrimpDb(object):
         self.update_lock.release()
 
 class DbView(object):
-    def __init__(self, shrimp_db, root_addr):
+    def __init__(self, shrimp_db, root_addr, weak=True):
         self.shrimp_db = shrimp_db
-        self.cache = {}
+        self.cache = weakref.WeakValueDictionary() if weak else {}
         self.root_addr = root_addr
 
     def get(self, addr=None):

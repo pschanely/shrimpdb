@@ -19,8 +19,7 @@ Use db.view() for read-only access:
             view = db.view()
             print view['people']['Phil']['age']
 
-ShripDb is thread safe.
-The dictionaries returned are always lazily instantiated, so your structure on disk can be much larger than RAM.  When modifying the structure, you may use all the usual list and dictionary methods:
+ShrimpDb is thread safe.  The dictionaries returned are always lazily instantiated, so your structure on disk can be much larger than RAM.  When modifying the structure, you may use all the usual list and dictionary methods:
 
             with db as root:
                 root['people']['Phil']['children'] = ['Tyler']

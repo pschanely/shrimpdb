@@ -44,6 +44,7 @@ ShrimpDB in practice
 --------------------
 
 If you need secondary indicies, you'll need to maintain them yourself, like so:
+
             with db as root:
                 root['people']['Vivian'] = {'age':7}
                 root['people_by_age'][7].append('Vivian')

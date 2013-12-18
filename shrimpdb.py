@@ -84,7 +84,7 @@ class ShrimpDb(object):
         if isinstance(newobj, collections.Mapping):
             if self.is_db_dict(newobj):
                 if newobj._state is None: # not materialized
-                    return (hex(newobj._addr), 
+                    return (hex(int(newobj._addr)), 
                             self.is_db_dict(oldobj) and oldobj._addr == newobj._addr)
             if not isinstance(oldobj, collections.Mapping):
                 oldobj = {}
@@ -98,10 +98,10 @@ class ShrimpDb(object):
                 all_same = all_same and same
             if all_same and self.is_db_dict(oldobj):
                 # materialized ... but nothing changed, so leave it
-                return hex(oldobj._addr), True
+                return hex(int(oldobj._addr)), True
             else:
                 addr = self.writeline(result)
-                return hex(addr), all_same
+                return hex(int(addr)), all_same
         elif isinstance(newobj, basestring):
             return '|' + newobj, oldobj == newobj
         elif hasattr(newobj, '__iter__'):

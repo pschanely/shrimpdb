@@ -47,6 +47,7 @@ class ShrimpDbTestCase(unittest.TestCase):
         fh.close()
         NUM_BATCHES, BATCH_SIZE, TREE_DEPTH = 100, 100, 4
         # NUM_BATCHES, BATCH_SIZE, TREE_DEPTH = 500, 2000, 4
+        db = None
         try:
             db = shrimpdb.ShrimpDb(filename=fh.name)
             alphabet = [chr(ord('a')+i) for i in range(26)]
@@ -85,8 +86,9 @@ class ShrimpDbTestCase(unittest.TestCase):
                         pointer = pointer[k[idx]]
                     self.assertEquals(pointer[k[TREE_DEPTH:]], val)
         finally:
+            if db is not None:
+                db.closedb()
             os.unlink(fh.name)
-
 if __name__ == '__main__':
     unittest.main()
 
